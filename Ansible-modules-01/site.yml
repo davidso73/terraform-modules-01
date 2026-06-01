@@ -1,0 +1,117 @@
+---
+# 1. Base provisioning for all servers
+- name: Apply base system configurations
+  hosts: all
+  gather_facts: yes
+  tasks:
+    - name: Update apt package manager cache
+      apt:
+        update_cache: yes
+        force_apt_get: yes
+        cache_valid_time: 3600
+
+    - name: Install fundamental system packages
+      apt:
+        name:
+          - curl
+          - git
+          - python3
+          - python3-pip
+          - python3-venv
+        state: present
+
+    - name: Create dedicated application deployment group
+      group:
+        name: app-group
+        state: present
+
+    - name: Create non-privileged application execution user
+      user:
+        name: app-runner
+        group: app-group
+        shell: /bin/bash
+        create_home: yes
+
+    - name: Ensure target runtime directories exist
+      file:
+        path: "{{ item }}"
+        state: directory
+        owner: app-runner
+        group: app-group
+        mode: '0755'
+      loop:
+        - /var/www/app
+        - /etc/app/config
+
+# 2. Configure dedicated Nginx Frontend Proxy
+- name: Deploy and Configure Edge Nginx Proxy Server
+  hosts: nginx
+  tasks:
+    - name: Install Nginx server package
+      apt:
+        name: nginx
+        state: present
+
+    - name: Deploy custom Nginx reverse proxy configurations
+      template:
+        src: templates/nginx_proxy.conf.j2
+        dest: /etc/nginx/sites-available/app_proxy.conf
+        owner: root
+        group: root
+        mode: '0644'
+      notify: Restart Nginx Service
+
+  handlers:
+    - name: Restart Nginx Service
+      service:
+        name: nginx
+        state: restarted
+        enabled: yes
+
+# 3. Dynamic Application Deployments
+- name: Deploy Service Runtimes and Synchronization Blocks
+  hosts: app_servers
+  vars:
+    # Centralized Cloud Environmental Variables mappings
+    aws_region: "us-east-1"
+    rds_endpoint: "app-db.cluster-xxxx.us-east-1.rds.amazonaws.com:5432"
+    db_username: "postgres_admin"
+    db_password: "SecurePassword2026"
+    s3_bucket_name: "my-unique-app-data-bucket-2026"
+    sns_topic_arn: "arn:aws:sns:us-east-1:123456789012:app-notifications"
+  tasks:
+    - name: Distribute application configuration environments
+      template:
+        src: templates/env_config.json.j2
+        dest: /etc/app/config/env.json
+        owner: app-runner
+        group: app-group
+        mode: '0600'
+
+    - name: Synchronize application artifact codebase
+      copy:
+        src: files/app_release/
+        dest: /var/www/app/
+        owner: app-runner
+        group: app-group
+        mode: '0755'
+
+    - name: Handle systemd unit declarations for services
+      template:
+        src: templates/app_service.service.j2
+        dest: "/etc/systemd/system/{{ inventory_hostname }}.service"
+        owner: root
+        group: root
+        mode: '0644'
+      notify: Reload Systemd Daemon
+
+    - name: Force start and enable runtime application blocks
+      service:
+        name: "{{ inventory_hostname }}.service"
+        state: restarted
+        enabled: yes
+
+  handlers:
+    - name: Reload Systemd Daemon
+      systemd:
+        daemon_reload: yes

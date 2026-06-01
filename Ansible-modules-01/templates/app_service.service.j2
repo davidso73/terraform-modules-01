@@ -1,0 +1,18 @@
+[Unit]
+Description=Application Service Tier Daemon - {{ inventory_hostname }}
+After=network.target
+
+[Service]
+Type=simple
+User=app-runner
+Group=app-group
+WorkingDirectory=/var/www/app
+Environment=APP_CONFIG_PATH=/etc/app/config/env.json
+ExecStart=/var/www/app/venv/bin/python3 /var/www/app/main.py
+Restart=always
+RestartSec=5
+StandardOutput=append:/var/log/app-service-output.log
+StandardError=append:/var/log/app-service-error.log
+
+[Install]
+WantedBy=multi-user.target
