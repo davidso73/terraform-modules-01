@@ -1,0 +1,19 @@
+- name: Install and start nginx 
+  hosts: web
+  become: true  
+  
+  tasks:
+    - name: Update package cache
+      dnf:
+        update_cache: true 
+        
+    - name: Install nginx
+      dnf:
+        name: nginx
+        state: latest
+
+    - name: Ensure nginx is running and enabled
+      systemd:
+        name: nginx
+        state: started  
+        enabled: yes
